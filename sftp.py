@@ -1,5 +1,14 @@
-import pysftp
 import sys
+
+# Try to import pysftp, but don't fail the whole program if it's incompatible
+try:
+    import pysftp
+    _HAVE_PYSFTP = True
+    _PYSFTP_IMPORT_ERROR = None
+except Exception as e:
+    pysftp = None
+    _HAVE_PYSFTP = False
+    _PYSFTP_IMPORT_ERROR = e
 
 #this file is expected to be modifed once for every single chromebook in our BCI lab
 class fileTransfer:
@@ -9,10 +18,19 @@ class fileTransfer:
         self.private_key = private_key  # change
         self.private_key_pass = private_key_pass  # change
         self.port = 22
-        self.serverconn = self.connect(ignore_host_key)
+        # Delay connecting until explicitly requested; store None if pysftp unavailable
+        self.serverconn = None
+        if _HAVE_PYSFTP:
+            self.serverconn = self.connect(ignore_host_key)
 
     def connect(self, ignore_host_key):
         """Connects to the sftp server and returns the sftp connection object"""
+        if not _HAVE_PYSFTP:
+            raise ImportError(
+                "pysftp is not available or failed to import: %s.\n" 
+                "Install a compatible version of pysftp/paramiko or update the code to use paramiko directly." % _PYSFTP_IMPORT_ERROR
+            )
+
         try:
             cnopts = None
 
@@ -31,12 +49,10 @@ class fileTransfer:
             )
             if (serverconn):
                 print("Connected to host...")
+            return serverconn
         except Exception as err:
             print(err)
             raise Exception(err)
-
-        finally:
-            return serverconn
 
     def transfer(self, src, target):
         """Recursivily places files in the target dir, copies everything inside of src dir"""
